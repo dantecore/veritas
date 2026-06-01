@@ -77,18 +77,6 @@ func (h *URLHandler) CreateShortURL(w http.ResponseWriter, r *http.Request) {
 
 	// Respond to the user with complete URL (single source of truth)
 	utils.RespondWithJSON(w, http.StatusCreated, URLResponse{ShortURL: shortURL})
-
-	// Perform reachability check in the background
-	go func() {
-		isReachable := utils.CheckURLReachability(req.OriginalURL, h.App.Logger)
-		if !isReachable {
-			h.App.Logger.Info("URL is not reachable, deleting", "id", insertedID)
-			err := h.App.Querier.DeleteURL(r.Context(), insertedID)
-			if err != nil {
-				h.App.Logger.Error("Failed to delete unreachable URL", "id", insertedID, "error", err)
-			}
-		}
-	}()
 }
 
 func (h *URLHandler) RedirectToOriginalURL(w http.ResponseWriter, r *http.Request) {
