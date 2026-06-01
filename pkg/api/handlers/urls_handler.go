@@ -49,7 +49,16 @@ func (h *URLHandler) CreateShortURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	insertedID, err := h.App.Querier.CreateURL(r.Context(), req.OriginalURL)
+	tx, err := h.App.DB.Begin(r.Context())
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create URL")
+		h.App.Logger.Error("Failed to begin URL creation transaction", "error", err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	queries := database.New(tx)
+	insertedID, err := queries.CreateURL(r.Context(), req.OriginalURL)
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create URL")
 		h.App.Logger.Error("Failed to create URL", "error", err)
@@ -58,13 +67,19 @@ func (h *URLHandler) CreateShortURL(w http.ResponseWriter, r *http.Request) {
 
 	shortCode := utils.ToBase62(uint64(insertedID))
 
-	err = h.App.Querier.UpdateShortCode(r.Context(), database.UpdateShortCodeParams{
+	err = queries.UpdateShortCode(r.Context(), database.UpdateShortCodeParams{
 		ShortCode: shortCode,
 		ID:        insertedID,
 	})
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to update short code")
 		h.App.Logger.Error("Failed to update short code", "error", err)
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create URL")
+		h.App.Logger.Error("Failed to commit URL creation transaction", "error", err)
 		return
 	}
 
