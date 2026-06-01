@@ -74,7 +74,7 @@ func main() {
 	}
 	logger.Info("starting server", "addr", PORT)
 
-	err = http.ListenAndServe(":"+PORT, redirectorapi.Routes(logger, queries, redisClient, natsConn))
+	err = http.ListenAndServe(":"+PORT, redirectorapi.Routes(logger, queries, cache.NewRedisCache(redisClient), natsConn))
 	if err != nil {
 		logger.Error("server error", "err", err)
 		os.Exit(1)

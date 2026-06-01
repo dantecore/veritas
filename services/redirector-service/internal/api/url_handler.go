@@ -1,18 +1,27 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	database "github.com/nouvadev/veritas/pkg/database/sqlc"
+	cachepkg "github.com/nouvadev/veritas/pkg/cache"
 	eventsv1 "github.com/nouvadev/veritas/pkg/gen/proto/proto/events/v1"
 	"github.com/nouvadev/veritas/pkg/utils"
-	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
 )
+
+type Cache interface {
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, key, value string, ttl time.Duration) error
+}
+
+type URLQuerier interface {
+	GetURLByShortCode(ctx context.Context, shortCode string) (string, error)
+}
 
 type EventPublisher interface {
 	Publish(subject string, data []byte) error
@@ -20,12 +29,12 @@ type EventPublisher interface {
 
 type URLHandler struct {
 	Logger    *slog.Logger
-	Querier   database.Querier
-	Cache     *redis.Client
+	Querier   URLQuerier
+	Cache     Cache
 	Publisher EventPublisher
 }
 
-func NewURLHandler(logger *slog.Logger, querier database.Querier, cache *redis.Client, publisher EventPublisher) *URLHandler {
+func NewURLHandler(logger *slog.Logger, querier URLQuerier, cache Cache, publisher EventPublisher) *URLHandler {
 	return &URLHandler{
 		Logger:    logger,
 		Querier:   querier,
@@ -42,7 +51,7 @@ func (h *URLHandler) RedirectToOriginalURL(w http.ResponseWriter, r *http.Reques
 	}
 
 	// 1. Try to get from cache first
-	originalURL, err := h.Cache.Get(r.Context(), shortCode).Result()
+	originalURL, err := h.Cache.Get(r.Context(), shortCode)
 	if err == nil {
 		h.Logger.Info("cache hit", "short_code", shortCode)
 		// Redirect and publish event
@@ -51,7 +60,7 @@ func (h *URLHandler) RedirectToOriginalURL(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if !errors.Is(err, redis.Nil) {
+	if !errors.Is(err, cachepkg.ErrMiss) {
 		h.Logger.Error("redis error", "err", err)
 	} else {
 		h.Logger.Info("cache miss", "short_code", shortCode)
@@ -70,7 +79,7 @@ func (h *URLHandler) RedirectToOriginalURL(w http.ResponseWriter, r *http.Reques
 	}
 
 	// 3. Store in cache for future requests
-	if err := h.Cache.Set(r.Context(), shortCode, originalURL, 1*time.Hour).Err(); err != nil {
+	if err := h.Cache.Set(r.Context(), shortCode, originalURL, 1*time.Hour); err != nil {
 		h.Logger.Error("failed to set cache", "err", err)
 	}
 

@@ -5,11 +5,9 @@ import (
 	"net/http"
 
 	commonhandlers "github.com/nouvadev/veritas/pkg/api/handlers"
-	database "github.com/nouvadev/veritas/pkg/database/sqlc"
-	"github.com/redis/go-redis/v9"
 )
 
-func Routes(logger *slog.Logger, querier database.Querier, cache *redis.Client, publisher EventPublisher) http.Handler {
+func Routes(logger *slog.Logger, querier URLQuerier, cache Cache, publisher EventPublisher) http.Handler {
 	mux := http.NewServeMux()
 	u := NewURLHandler(logger, querier, cache, publisher)
 
