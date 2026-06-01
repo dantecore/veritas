@@ -24,9 +24,12 @@ services:
         APP_NAME: creator # Tells Dockerfile which application to build
     command: /usr/local/bin/creator # Run this binary when container starts
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-postgres://veritas:veritas@postgres:5432/veritas?sslmode=disable}
       - CREATOR_PORT=${CREATOR_PORT:-8081} # Get from .env file, use 8081 if not set
       - BASE_URL=${BASE_URL:-http://localhost:8080}
+    depends_on:
+      postgres:
+        condition: service_healthy
     labels:
       # --- Traefik Settings (for API Gateway) ---
       - "traefik.enable=true"
@@ -52,12 +55,17 @@ services:
         APP_NAME: redirector
     command: /usr/local/bin/redirector
     environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
+      - DATABASE_URL=${DATABASE_URL:-postgres://veritas:veritas@postgres:5432/veritas?sslmode=disable}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
       - NATS_URL=nats://nats:4222
       - REDIRECTOR_PORT=${REDIRECTOR_PORT:-8082}
     depends_on:
-      - nats
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_started
     labels:
       # --- Traefik Settings (for short URL redirects) ---
       - "traefik.enable=true"
@@ -81,6 +89,36 @@ services:
       - nats
 
   # -------------------------------------------
+  # PostgreSQL Service (Persistent Storage)
+  # -------------------------------------------
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=veritas
+      - POSTGRES_USER=veritas
+      - POSTGRES_PASSWORD=veritas
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./sql/migrations/001_urls.sql:/migrations/001_urls.sql:ro
+      - ./sql/init/001_urls.sh:/docker-entrypoint-initdb.d/001_urls.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U veritas -d veritas"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # -------------------------------------------
+  # Redis Service (Redirect Cache)
+  # -------------------------------------------
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # -------------------------------------------
   # NATS Service (Messaging)
   # -------------------------------------------
   nats:
@@ -93,7 +131,7 @@ services:
   # Traefik (API Gateway / Receptionist)
   # -------------------------------------------
   traefik:
-    image: "traefik:v3.0"
+    image: "traefik:v3.6"
     command:
       - "--api.insecure=true"
       - "--providers.docker=true"
@@ -105,3 +143,6 @@ services:
       - "8081:8080"    # For Traefik Dashboard (optional)
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+volumes:
+  postgres-data:

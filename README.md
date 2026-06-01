@@ -36,36 +36,32 @@ Traefik acts as the local gateway:
 
 - [Docker](https://docs.docker.com/get-docker/)
 - [Docker Compose](https://docs.docker.com/compose/)
-- A PostgreSQL database
-- A Redis instance
 
 ### Run the Application
 
-1. Create a local environment file:
+Start the stack:
 
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Set `DATABASE_URL` and `REDIS_URL` in `.env`.
-
-3. Start the stack:
-
-   ```bash
-   docker compose up --build
-   ```
+```bash
+docker compose up --build
+```
 
 The application is available at `http://localhost:8080`.
+
+Docker Compose starts PostgreSQL, Redis, and NATS locally. PostgreSQL applies
+`sql/migrations/001_urls.sql` automatically when its data volume is first
+created.
 
 ## Environment Variables
 
 | Variable | Example | Description |
 | --- | --- | --- |
-| `DATABASE_URL` | `postgres://user:password@host:5432/veritas?sslmode=disable` | PostgreSQL connection string |
-| `REDIS_URL` | `redis://host:6379` | Redis connection string |
+| `DATABASE_URL` | `postgres://user:password@host:5432/veritas?sslmode=disable` | Optional PostgreSQL connection string override |
+| `REDIS_URL` | `redis://host:6379` | Optional Redis connection string override |
 | `BASE_URL` | `http://localhost:8080` | Base URL used when generating short links |
 
-Docker Compose configures the service ports and the internal NATS URL automatically.
+Docker Compose provides local defaults for PostgreSQL and Redis and configures
+the internal NATS URL automatically. Set overrides in `.env` only when using
+external services.
 
 ## Continuous Integration
 
