@@ -6,12 +6,11 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
-	"github.com/nouvadev/veritas/pkg/api"
 	"github.com/nouvadev/veritas/pkg/cache"
-	"github.com/nouvadev/veritas/pkg/config"
 	"github.com/nouvadev/veritas/pkg/database"
 	sqlc "github.com/nouvadev/veritas/pkg/database/sqlc"
 	"github.com/nouvadev/veritas/pkg/nats"
+	redirectorapi "github.com/nouvadev/veritas/services/redirector-service/internal/api"
 )
 
 func main() {
@@ -35,6 +34,8 @@ func main() {
 		logger.Error("failed to connect to database", "err", err)
 		os.Exit(1)
 	}
+	defer dbpool.Close()
+
 	logger.Info("database connection pool established")
 
 	redisURL := os.Getenv("REDIS_URL")
@@ -67,21 +68,13 @@ func main() {
 
 	queries := sqlc.New(dbpool)
 
-	app := &config.AppConfig{
-		Logger:  logger,
-		DB:      dbpool,
-		Querier: queries,
-		Cache:   redisClient,
-		NATS:    natsConn,
-	}
-
 	PORT := os.Getenv("REDIRECTOR_PORT")
 	if PORT == "" {
 		PORT = "8082"
 	}
 	logger.Info("starting server", "addr", PORT)
 
-	err = http.ListenAndServe(":"+PORT, api.RedirectRoutes(app))
+	err = http.ListenAndServe(":"+PORT, redirectorapi.Routes(logger, queries, redisClient, natsConn))
 	if err != nil {
 		logger.Error("server error", "err", err)
 		os.Exit(1)

@@ -6,10 +6,8 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
-	"github.com/nouvadev/veritas/pkg/api"
-	"github.com/nouvadev/veritas/pkg/config"
 	"github.com/nouvadev/veritas/pkg/database"
-	sqlc "github.com/nouvadev/veritas/pkg/database/sqlc"
+	creatorapi "github.com/nouvadev/veritas/services/creator-service/internal/api"
 )
 
 func main() {
@@ -37,21 +35,13 @@ func main() {
 
 	logger.Info("database connection pool established")
 
-	queries := sqlc.New(dbpool)
-
-	app := &config.AppConfig{
-		Logger:  logger,
-		DB:      dbpool,
-		Querier: queries,
-	}
-
 	PORT := os.Getenv("CREATOR_PORT")
 	if PORT == "" {
 		PORT = "8081"
 	}
 	logger.Info("starting server", "addr", PORT)
 
-	err = http.ListenAndServe(":"+PORT, api.CreateURLRoutes(app))
+	err = http.ListenAndServe(":"+PORT, creatorapi.Routes(logger, dbpool))
 	if err != nil {
 		logger.Error("server error", "err", err)
 		os.Exit(1)
