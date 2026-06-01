@@ -13,8 +13,8 @@ func CreateURLRoutes(app *config.AppConfig) http.Handler {
 	h := handlers.NewHealthcheckHandler(app)
 	u := handlers.NewURLHandler(app)
 
-	mux.HandleFunc("GET /healthcheck", h.HealthcheckHandler)
-	mux.HandleFunc("POST /create", u.CreateShortURL)
+	mux.HandleFunc("GET /api/healthcheck", h.HealthcheckHandler)
+	mux.HandleFunc("POST /api/create", u.CreateShortURL)
 
 	return mux
 }

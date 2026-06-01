@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
-	"github.com/nouvadev/veritas/pkg/api/handlers"
+	"github.com/nouvadev/veritas/pkg/api"
 	"github.com/nouvadev/veritas/pkg/cache"
 	"github.com/nouvadev/veritas/pkg/config"
 	"github.com/nouvadev/veritas/pkg/database"
@@ -81,15 +81,7 @@ func main() {
 	}
 	logger.Info("starting server", "addr", PORT)
 
-	mux := http.NewServeMux()
-
-	h := handlers.NewHealthcheckHandler(app)
-	u := handlers.NewURLHandler(app)
-
-	mux.HandleFunc("GET /healthcheck", h.HealthcheckHandler)
-	mux.HandleFunc("GET /{short_code}", u.RedirectToOriginalURL)
-
-	err = http.ListenAndServe(":"+PORT, mux)
+	err = http.ListenAndServe(":"+PORT, api.RedirectRoutes(app))
 	if err != nil {
 		logger.Error("server error", "err", err)
 		os.Exit(1)
