@@ -58,6 +58,7 @@ created.
 | `DATABASE_URL` | `postgres://user:password@host:5432/veritas?sslmode=disable` | Optional PostgreSQL connection string override |
 | `REDIS_URL` | `redis://host:6379` | Optional Redis connection string override |
 | `BASE_URL` | `http://localhost:8080` | Base URL used when generating short links |
+| `TRUSTED_PROXY_CIDRS` | `172.28.0.2/32` | Comma-separated proxy networks whose forwarded IP headers the redirector trusts |
 
 Docker Compose provides local defaults for PostgreSQL and Redis and configures
 the internal NATS URL automatically. Set overrides in `.env` only when using

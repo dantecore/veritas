@@ -9,7 +9,7 @@ import (
 )
 
 func TestRoutes(t *testing.T) {
-	router := Routes(testLogger(), nil, nil, nil)
+	router := Routes(testLogger(), nil, nil, nil, nil)
 
 	tests := []struct {
 		name       string

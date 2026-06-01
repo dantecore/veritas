@@ -68,13 +68,19 @@ func main() {
 
 	queries := sqlc.New(dbpool)
 
+	trustedProxyCIDRs, err := redirectorapi.ParseTrustedProxyCIDRs(os.Getenv("TRUSTED_PROXY_CIDRS"))
+	if err != nil {
+		logger.Error("invalid TRUSTED_PROXY_CIDRS environment variable", "err", err)
+		os.Exit(1)
+	}
+
 	PORT := os.Getenv("REDIRECTOR_PORT")
 	if PORT == "" {
 		PORT = "8082"
 	}
 	logger.Info("starting server", "addr", PORT)
 
-	err = http.ListenAndServe(":"+PORT, redirectorapi.Routes(logger, queries, cache.NewRedisCache(redisClient), natsConn))
+	err = http.ListenAndServe(":"+PORT, redirectorapi.Routes(logger, queries, cache.NewRedisCache(redisClient), natsConn, trustedProxyCIDRs))
 	if err != nil {
 		logger.Error("server error", "err", err)
 		os.Exit(1)

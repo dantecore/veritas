@@ -181,7 +181,7 @@ func TestRedirectToOriginalURLContinuesWhenPublishFails(t *testing.T) {
 }
 
 func serveRedirect(cache Cache, querier URLQuerier, publisher EventPublisher) *httptest.ResponseRecorder {
-	router := Routes(testLogger(), querier, cache, publisher)
+	router := Routes(testLogger(), querier, cache, publisher, nil)
 	req := httptest.NewRequest(http.MethodGet, "/abc123", nil)
 	req.Header.Set("User-Agent", "test-agent")
 	req.RemoteAddr = "192.0.2.1:1234"
@@ -218,9 +218,9 @@ func assertPublishedRedirectEvent(t *testing.T, publisher *fakePublisher, wantOr
 		t.Fatalf("unmarshal redirect event: %v", err)
 	}
 	if event.ShortCode != "abc123" || event.OriginalUrl != wantOriginalURL {
-		t.Fatalf("unexpected redirect event: %#v", event)
+		t.Fatalf("unexpected redirect event: %#v", &event)
 	}
-	if event.UserAgent != "test-agent" || event.IpAddress != "192.0.2.1:1234" {
-		t.Fatalf("unexpected request metadata: %#v", event)
+	if event.UserAgent != "test-agent" || event.IpAddress != "192.0.2.1" {
+		t.Fatalf("unexpected request metadata: %#v", &event)
 	}
 }

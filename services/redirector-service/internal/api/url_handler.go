@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -28,18 +29,20 @@ type EventPublisher interface {
 }
 
 type URLHandler struct {
-	Logger    *slog.Logger
-	Querier   URLQuerier
-	Cache     Cache
-	Publisher EventPublisher
+	Logger            *slog.Logger
+	Querier           URLQuerier
+	Cache             Cache
+	Publisher         EventPublisher
+	TrustedProxyCIDRs []netip.Prefix
 }
 
-func NewURLHandler(logger *slog.Logger, querier URLQuerier, cache Cache, publisher EventPublisher) *URLHandler {
+func NewURLHandler(logger *slog.Logger, querier URLQuerier, cache Cache, publisher EventPublisher, trustedProxyCIDRs []netip.Prefix) *URLHandler {
 	return &URLHandler{
-		Logger:    logger,
-		Querier:   querier,
-		Cache:     cache,
-		Publisher: publisher,
+		Logger:            logger,
+		Querier:           querier,
+		Cache:             cache,
+		Publisher:         publisher,
+		TrustedProxyCIDRs: trustedProxyCIDRs,
 	}
 }
 
@@ -93,7 +96,7 @@ func (h *URLHandler) publishRedirectEvent(shortCode, originalURL string, r *http
 		ShortCode:   shortCode,
 		OriginalUrl: originalURL,
 		UserAgent:   r.UserAgent(),
-		IpAddress:   r.RemoteAddr,
+		IpAddress:   clientIPAddress(r, h.TrustedProxyCIDRs),
 	}
 
 	eventBytes, err := proto.Marshal(event)
