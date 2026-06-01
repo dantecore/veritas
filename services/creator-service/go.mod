@@ -1,6 +1,6 @@
 module github.com/nouvadev/veritas/services/creator-service
 
-go 1.24.4
+go 1.26.3
 
 require (
 	github.com/joho/godotenv v1.5.1

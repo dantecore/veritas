@@ -1,6 +1,6 @@
 # --- Stage 1: Build Stage ---
 # Starting with a Go-optimized image for compilation
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 # We'll receive the application name to build as an argument during build time
 ARG APP_NAME

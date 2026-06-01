@@ -1,6 +1,6 @@
 module github.com/nouvadev/veritas/services/analytics-service
 
-go 1.24.4
+go 1.26.3
 
 require github.com/nats-io/nats.go v1.36.0
 require google.golang.org/protobuf v1.34.2

@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: veritas-config
-data:
-  # nats connection string
-  NATS_URL: "nats://nats.default.svc.cluster.local:4222"
-  # base url
-  BASE_URL: "http://go.VERITAS_IP.nip.io"

@@ -1,35 +1,32 @@
-# .github/workflows/ci.yml
-
 name: ci
 
 on:
   push:
     branches:
       - main
-    tags:
-      - 'v*.*.*' # Trigger on version tags like v1.0.0, v1.1.0 etc.
   pull_request:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
-  # --- 1. Frontend Test Job ---
-  # This job runs to test the frontend part of the application.
-  test-frontend:
+  frontend:
     runs-on: ubuntu-latest
     steps:
       - name: checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: set up node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: '24'
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - name: install frontend dependencies
-        run: npm ci --prefix frontend
+        run: npm ci --include=dev --prefix frontend
 
       - name: lint frontend
         run: npm run lint --prefix frontend
@@ -37,178 +34,61 @@ jobs:
       - name: build frontend
         run: npm run build --prefix frontend
 
-  # --- 2. Backend Test Job ---
-  # This job runs to test the backend services.
-  test-backend:
+  backend:
     runs-on: ubuntu-latest
     steps:
       - name: checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: set up go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.24.4'
+          go-version: '1.26.x'
           cache-dependency-path: '**/go.sum'
 
       - name: run go tests
         run: |
-          echo "discovering go modules from go.work..."
           modules=$(go list -m -f '{{.Dir}}')
           for module in $modules; do
             echo "--- running tests in module: $module ---"
             (cd "$module" && go test -v ./...)
           done
 
-  # --- 3. Build and Push Images Job ---
-  # This job runs ONLY on a push to the 'main' branch
-  # and depends on the success of the previous test jobs.
-  build-and-push:
-    # Start after 'test-frontend' and 'test-backend' jobs are finished
-    needs: [test-frontend, test-backend]
-    # Run only on push events (to main branch or tags)
-    if: github.event_name == 'push'
+  docker:
+    needs: [frontend, backend]
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - image: creator-service
+            context: .
+            file: ./services/creator-service/Dockerfile
+            build_args: APP_NAME=creator
+          - image: redirector-service
+            context: .
+            file: ./services/redirector-service/Dockerfile
+            build_args: APP_NAME=redirector
+          - image: analytics-service
+            context: .
+            file: ./services/analytics-service/Dockerfile
+            build_args: APP_NAME=analytics
+          - image: frontend
+            context: ./frontend
+            file: ./frontend/Dockerfile
+            build_args: VITE_API_URL=/api
     steps:
       - name: checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Fetches all history for all branches and tags
-
-      # An action to detect which files have changed
-      - name: get changed files
-        id: changed-files
-        uses: tj-actions/changed-files@v44 # This action lists the changed files
-
-      - name: login to azure container registry
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: acr login
-        run: az acr login --name ${{ secrets.ACR_LOGIN_SERVER }}
+        uses: actions/checkout@v6
 
       - name: set up docker buildx
-        uses: docker/setup-buildx-action@v3
-        
-      # --- Conditional build steps ---
+        uses: docker/setup-buildx-action@v4
 
-      - name: build and push creator-service image
-        # Run this step if a version tag is pushed, OR if there are changes in the relevant source files on a main branch push.
-        if: |
-          startsWith(github.ref, 'refs/tags/v') ||
-          (steps.changed-files.outputs.any_changed == 'true' && (contains(steps.changed-files.outputs.all_changed_files, 'services/creator-service/') || contains(steps.changed-files.outputs.all_changed_files, 'pkg/') || contains(steps.changed-files.outputs.all_changed_files, 'k8s/creator-service.yaml')))
-        uses: docker/build-push-action@v5
+      - name: build ${{ matrix.image }} image
+        uses: docker/build-push-action@v7
         with:
-          context: .
-          file: ./services/creator-service/Dockerfile
-          push: true
-          tags: ${{ secrets.ACR_LOGIN_SERVER }}/veritas/creator-service:${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.sha }}
-          build-args: APP_NAME=creator
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: build and push redirector-service image
-        # Run this step if a version tag is pushed, OR if there are changes in the relevant source files on a main branch push.
-        if: |
-          startsWith(github.ref, 'refs/tags/v') ||
-          (steps.changed-files.outputs.any_changed == 'true' && (contains(steps.changed-files.outputs.all_changed_files, 'services/redirector-service/') || contains(steps.changed-files.outputs.all_changed_files, 'pkg/') || contains(steps.changed-files.outputs.all_changed_files, 'k8s/redirector-service.yaml')))
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./services/redirector-service/Dockerfile
-          push: true
-          tags: ${{ secrets.ACR_LOGIN_SERVER }}/veritas/redirector-service:${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.sha }}
-          build-args: APP_NAME=redirector
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: build and push analytics-service image
-        # Run this step if a version tag is pushed, OR if there are changes in the relevant source files on a main branch push.
-        if: |
-          startsWith(github.ref, 'refs/tags/v') ||
-          (steps.changed-files.outputs.any_changed == 'true' && (contains(steps.changed-files.outputs.all_changed_files, 'services/analytics-service/') || contains(steps.changed-files.outputs.all_changed_files, 'pkg/') || contains(steps.changed-files.outputs.all_changed_files, 'k8s/analytics-service.yaml')))
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./services/analytics-service/Dockerfile
-          push: true
-          tags: ${{ secrets.ACR_LOGIN_SERVER }}/veritas/analytics-service:${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.sha }}
-          build-args: APP_NAME=analytics
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: build and push frontend image
-        # Run this step if a version tag is pushed, OR if there are changes in the relevant source files on a main branch push.
-        if: |
-          startsWith(github.ref, 'refs/tags/v') ||
-          (steps.changed-files.outputs.any_changed == 'true' && (contains(steps.changed-files.outputs.all_changed_files, 'frontend/') || contains(steps.changed-files.outputs.all_changed_files, 'k8s/frontend-service.yaml')))
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          push: true
-          tags: ${{ secrets.ACR_LOGIN_SERVER }}/veritas/frontend:${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.sha }}
-          build-args: VITE_API_URL=/api
-          ccache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # --- 4. deploy to kubernetes job ---
-  deploy:
-    needs: build-and-push
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    steps:
-      - name: checkout repository
-        uses: actions/checkout@v4
-
-      - name: login to azure
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: set up kubernetes context
-        run: az aks get-credentials --resource-group veritas-rg --name veritas-aks --overwrite-existing
-
-      # --- NEW STEP: WAIT FOR TRAEFIK IP AND GET IT ---
-      - name: get traefik external ip
-        id: get_ip
-        run: |
-          echo "waiting for traefik external ip..."
-          # wait for 5 minutes (30 attempts x 10 seconds) for the ip to be ready
-          for i in {1..30}; do
-            # -n default adds the default namespace, indicating traefik is in the default namespace
-            IP=$(kubectl get service traefik -n default -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-            # if the ip is not empty and not <pending>, exit the loop
-            if [[ -n "$IP" && "$IP" != "<pending>" ]]; then
-              echo "found ip: $IP"
-              # write the ip to the github environment for later use
-              echo "PUBLIC_IP=$IP" >> $GITHUB_ENV
-              exit 0
-            fi
-            echo "ip not ready yet. retrying in 10 seconds..."
-            sleep 10
-          done
-          echo "::error::failed to get traefik external ip after 5 minutes."
-          exit 1
-
-      - name: update k8s manifests
-        run: |
-          ACR_SERVER="${{ secrets.ACR_LOGIN_SERVER }}"
-          NEW_VERSION="${{ github.ref_name }}"
-          PUBLIC_IP="${{ env.PUBLIC_IP }}" # the ip from the previous step
-          
-          echo "updating manifests with ip: $PUBLIC_IP and version: $NEW_VERSION"
-          
-          # replace the image version and ip placeholder in all yaml files dynamically
-          find ./k8s -type f -name "*.yaml" -exec sed -i "s|image: ${ACR_SERVER}/veritas/creator-service:.*|image: ${ACR_SERVER}/veritas/creator-service:${NEW_VERSION}|g" {} +
-          find ./k8s -type f -name "*.yaml" -exec sed -i "s|image: ${ACR_SERVER}/veritas/redirector-service:.*|image: ${ACR_SERVER}/veritas/redirector-service:${NEW_VERSION}|g" {} +
-          find ./k8s -type f -name "*.yaml" -exec sed -i "s|image: ${ACR_SERVER}/veritas/analytics-service:.*|image: ${ACR_SERVER}/veritas/analytics-service:${NEW_VERSION}|g" {} +
-          find ./k8s -type f -name "*.yaml" -exec sed -i "s|image: ${ACR_SERVER}/veritas/frontend:.*|image: ${ACR_SERVER}/veritas/frontend:${NEW_VERSION}|g" {} +
-          find ./k8s -type f -name "*.yaml" -exec sed -i "s/VERITAS_IP/${PUBLIC_IP}/g" {} +
-
-      - name: deploy to kubernetes
-        run: |
-          echo "applying manifests to kubernetes cluster..."
-          kubectl apply -f k8s/
-          echo "deployment rollout initiated."
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: false
+          build-args: ${{ matrix.build_args }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

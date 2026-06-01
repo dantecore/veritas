@@ -1,6 +1,6 @@
 # --- Stage 1: Build Stage ---
 # Starting with a Go-optimized image for compilation
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 # We'll receive the application name to build as an argument during build time
 ARG APP_NAME
@@ -33,4 +33,4 @@ COPY --from=builder /app/bin/* /usr/local/bin/
 
 # Specify which command will run when the container starts
 # The command from docker-compose will override this, but it's good to have a default
-CMD ["/usr/local/bin/analytics"] 
+CMD ["/usr/local/bin/analytics"]
